@@ -99,6 +99,28 @@
   .hintline:empty{display:none}
   main{padding:14px 16px 80px}
   .meta{display:flex;justify-content:space-between;align-items:center;color:var(--muted);font-size:13px;margin:4px 0 12px}
+  .startpanel{margin:0 0 18px;padding:20px;background:linear-gradient(135deg,var(--card),color-mix(in srgb,var(--accent-soft) 65%,var(--card)));border:1px solid var(--line);border-radius:18px}
+  .starthead{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;margin-bottom:14px}
+  .starthead h2{font-size:19px;line-height:1.35;margin:0 0 3px;letter-spacing:.1px}
+  .starthead p{color:var(--muted);font-size:13px;margin:0}
+  .startlabel{color:var(--accent);font-size:12px;font-weight:650;white-space:nowrap}
+  .subjectgrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+  .subjectcard{min-width:0;padding:14px;border:1px solid var(--line);border-radius:14px;background:var(--card);transition:transform .16s,border-color .16s}
+  .subjectcard:hover{transform:translateY(-2px);border-color:var(--accent)}
+  .subjectopen{display:flex;width:100%;align-items:center;gap:10px;text-align:left;padding:0;border:0;background:none;color:var(--fg);cursor:pointer;font:inherit}
+  .subjecticon{display:grid;place-items:center;flex:none;width:36px;height:36px;border-radius:11px;background:var(--accent-soft);font-size:17px}
+  .subjecttitle{font-size:15px;font-weight:650}
+  .subjectcount{display:block;color:var(--muted);font-size:12px;font-weight:400}
+  .subjectdesc{margin:10px 0 8px;color:var(--muted);font-size:12px;line-height:1.55;min-height:38px}
+  .quicklinks{display:flex;gap:6px;flex-wrap:wrap}
+  .quicklink{border:1px solid var(--line);border-radius:999px;padding:4px 8px;background:transparent;color:var(--muted);font:inherit;font-size:11px;cursor:pointer}
+  .quicklink:hover{border-color:var(--accent);color:var(--accent)}
+  .howto{display:flex;gap:8px;flex-wrap:wrap;margin-top:13px;padding-top:12px;border-top:1px solid var(--line)}
+  .howto span{font-size:12px;color:var(--muted)}
+  .howto b{color:var(--fg);font-weight:600}
+  .howto .stepnum{display:inline-grid;place-items:center;width:18px;height:18px;margin-right:5px;border-radius:50%;background:var(--accent-soft);color:var(--accent);font-size:10px}
+  @media(max-width:680px){.startpanel{padding:16px}.subjectgrid{grid-template-columns:repeat(2,minmax(0,1fr))}.subjectcard{padding:12px}.subjectdesc{min-height:0}.starthead h2{font-size:17px}}
+  @media(max-width:380px){.subjectgrid{grid-template-columns:1fr}.subjectdesc{margin:6px 0}}
   .card{
     background:var(--card); border:1px solid var(--line); border-radius:var(--radius);
     padding:14px 16px; margin-bottom:12px;
@@ -194,6 +216,15 @@
   <div class="wrap">
     <div id="searchview">
     <div class="meta"><span id="count"></span><button class="chip" id="sortbtn">排序：默认</button></div>
+    <section class="startpanel" id="startpanel" aria-labelledby="starttitle">
+      <div class="starthead"><div><h2 id="starttitle">从科目开始复习</h2><p>按科目浏览知识点，也可以直接搜索公式、术语或单词。</p></div><span class="startlabel">四科知识库</span></div>
+      <div class="subjectgrid" id="subjectgrid"></div>
+      <div class="howto" aria-label="使用方式">
+        <span><i class="stepnum">1</i><b>搜索</b> 直接定位知识点</span>
+        <span><i class="stepnum">2</i><b>筛选</b> 按分类和章节收窄</span>
+        <span><i class="stepnum">3</i><b>收藏</b> 留下需要复习的条目</span>
+      </div>
+    </section>
     <div id="boot" class="empty">正在加载页面内容……<br><span style="font-size:13px">这行字如果一直不消失，说明页面没有加载完整：请下拉刷新一次，或换用 Safari / Chrome 打开。</span></div>
     <div id="list"></div>
     <button id="more" hidden>显示更多</button>
@@ -8017,6 +8048,19 @@ RAW.push(
   DATA.forEach(function (d) {
     d.plain = (d.t + " " + d.b + " " + d.c + " " + d.k).replace(/<[^>]+>/g, " ").toLowerCase();
   });
+  var SUBJECT_SUMMARY = {};
+  SUBJECTS.forEach(function (s) {
+    var counts = {}, total = 0;
+    DATA.forEach(function (d) {
+      if (d.s !== s) return;
+      total++;
+      counts[d.g] = (counts[d.g] || 0) + 1;
+    });
+    SUBJECT_SUMMARY[s] = {
+      count: total,
+      groups: Object.keys(counts).sort(function (a, b) { return counts[b] - counts[a]; }).slice(0, 3)
+    };
+  });
 
   var LS_KEY = "kaoyan_vault_v1";
   var store = { fav: [] };
@@ -8029,7 +8073,7 @@ RAW.push(
   }
 
   var state = { sub: (store.sub && SUBJECTS.indexOf(store.sub) !== -1 ? store.sub : "英语"),
-                group: "", chap: "", q: "", favOnly: false, limit: PAGE, sort: "default" };
+                group: "", chap: "", q: "", favOnly: false, started: false, limit: PAGE, sort: "default" };
 
   var $q = document.getElementById("q");
   var $subs = document.getElementById("subs");
@@ -8040,6 +8084,8 @@ RAW.push(
   var $more = document.getElementById("more");
   var $toast = document.getElementById("toast");
   var $sortbtn = document.getElementById("sortbtn");
+  var $startpanel = document.getElementById("startpanel");
+  var $subjectgrid = document.getElementById("subjectgrid");
   var $searchhead = document.getElementById("searchhead");
   var $searchview = document.getElementById("searchview");
   var $trans = document.getElementById("trans");
@@ -8132,6 +8178,7 @@ RAW.push(
         b.style.borderColor = "transparent";
       }
       b.onclick = function () {
+        state.started = true;
         state.sub = s; state.group = ""; state.chap = ""; state.favOnly = false;
         state.limit = PAGE; store.sub = s; persist(); render();
       };
@@ -8237,6 +8284,7 @@ RAW.push(
     renderChips();
     renderGroups();
     renderChaps();
+    renderStartPanel();
     var HINTS = {
       "英语": "分区说明：①核心词汇＝大纲词里真题词频≥40 的 2444 个必考词，背单词就从这里开始；②大纲词汇＝全量 6644 词（核心／中频／低频／未考／拓展），用来查词；③词汇精讲＝233 条用法解析（搭配 · 辨析 · 真题语境），只挑易错易混的词讲，不追求覆盖全部单词。",
       "数学": "分区说明：按基础阶段讲义的顺序组织 —— 高等数学 / 线性代数 / 概率统计，标注了数一 · 数二 · 数三的适用范围。",
@@ -8269,6 +8317,38 @@ RAW.push(
     $more.hidden = rows.length <= state.limit;
     $more.textContent = "显示更多（还有 " + Math.max(0, rows.length - state.limit) + " 条）";
   }
+
+  function renderStartPanel() {
+    var show = !state.started && !state.q.trim() && !state.favOnly && !state.group && !state.chap;
+    $startpanel.hidden = !show;
+    if (!show) return;
+    var icon = { "英语": "A", "数学": "∑", "政治": "★", "408": "⌘" };
+    var desc = {
+      "英语": "大纲词汇、真题词频、熟词僻义与固定搭配。",
+      "数学": "按高数、线代、概率统计梳理定义与常用公式。",
+      "政治": "覆盖马原、毛中特、史纲、思修法基及答题方法。",
+      "408": "数据结构、组成原理、操作系统与计算机网络。"
+    };
+    $subjectgrid.innerHTML = SUBJECTS.map(function (s) {
+      var summary = SUBJECT_SUMMARY[s];
+      return '<article class="subjectcard" style="--accent:var(--' + SUBJECT_VAR[s] + ');--accent-soft:color-mix(in srgb,var(--' + SUBJECT_VAR[s] + ') 12%,var(--card))">' +
+        '<button class="subjectopen" data-subject="' + esc(s) + '"><span class="subjecticon">' + icon[s] + '</span><span><span class="subjecttitle">' + esc(s) + '</span><span class="subjectcount">' + summary.count.toLocaleString("zh-CN") + ' 条知识点</span></span></button>' +
+        '<p class="subjectdesc">' + desc[s] + '</p><div class="quicklinks">' + summary.groups.map(function (g) {
+          return '<button class="quicklink" data-subject="' + esc(s) + '" data-group="' + esc(g) + '">' + esc(g) + '</button>';
+        }).join("") + '</div></article>';
+    }).join("");
+  }
+
+  $subjectgrid.addEventListener("click", function (e) {
+    var btn = e.target.closest("button[data-subject]");
+    if (!btn) return;
+    state.started = true;
+    state.sub = btn.getAttribute("data-subject");
+    state.group = btn.getAttribute("data-group") || "";
+    state.chap = ""; state.favOnly = false; state.q = ""; state.limit = PAGE;
+    $q.value = ""; store.sub = state.sub; persist(); render();
+    document.getElementById("count").scrollIntoView({ block: "start", behavior: "smooth" });
+  });
 
   $list.addEventListener("click", function (e) {
     if (e.target.id === "widen") {
