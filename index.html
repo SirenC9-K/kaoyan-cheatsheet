@@ -7615,13 +7615,26 @@ RAW.push(
 
   function current() {
     var terms = state.q.trim().toLowerCase().split(/\s+/).filter(Boolean);
-    var rows = DATA.filter(function (d) {
-      if (state.sub !== "全部" && d.s !== state.sub) return false;
-      if (state.group && d.g !== state.group) return false;
-      if (state.chap && d.c !== state.chap) return false;
-      if (state.favOnly && store.fav.indexOf(d.id) === -1) return false;
-      return matches(d, terms);
-    });
+    var picked = function (ts) {
+      return DATA.filter(function (d) {
+        if (state.sub !== "全部" && d.s !== state.sub) return false;
+        if (state.group && d.g !== state.group) return false;
+        if (state.chap && d.c !== state.chap) return false;
+        if (state.favOnly && store.fav.indexOf(d.id) === -1) return false;
+        return matches(d, ts);
+      });
+    };
+    var rows = picked(terms);
+    // 中文常连着写（如「卡方数字特征」），整串匹配不到时自动拆成两段再试
+    if (!rows.length && terms.length === 1 && terms[0].length >= 4) {
+      var t = terms[0], best = null, bestTerms = null;
+      for (var k = 2; k <= t.length - 2; k++) {
+        var parts = [t.slice(0, k), t.slice(k)];
+        var hit = picked(parts);
+        if (hit.length && (!best || hit.length > best.length)) { best = hit; bestTerms = parts; }
+      }
+      if (best) { rows = best; terms = bestTerms; }
+    }
     if (state.sort === "freq") {
       rows.sort(function (a, b) {
         if (b.f !== a.f) return b.f - a.f;
@@ -7636,7 +7649,7 @@ RAW.push(
         return at - bt;
       });
     }
-    return { rows: rows, terms: terms };
+    return { rows: rows, terms: terms, split: bestTerms || null };
   }
 
   function renderChips() {
@@ -7743,6 +7756,7 @@ RAW.push(
     var res = current();
     var rows = res.rows;
     $count.textContent = "共 " + DATA.length + " 条 · 命中 " + rows.length + " 条";
+    if (res.split) $count.textContent += "（已按「" + res.split.join(" + ") + "」拆分匹配）";
     var slice = rows.slice(0, state.limit);
     $list.innerHTML = slice.length
       ? slice.map(function (d) { return cardHTML(d, res.terms); }).join("")
